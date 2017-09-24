@@ -167,7 +167,9 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 
 
 // calculate trajectory and return nextvals
-void calculateTrajectory(vector<double> &next_x_vals,vector<double> &next_y_vals,double car_s,double car_d,double car_x,double car_y,double car_yaw,int prev_size,vector<double>  previous_path_x, vector<double>  previous_path_y, vector<double> &map_waypoints_x,vector<double> &map_waypoints_y,vector<double> &map_waypoints_s, vector<double>&map_waypoints_dx,vector<double> &map_waypoints_dy,int lane,double ref_vel ) {
+// walktrougth code using spline
+// create a widely spaced (x,y) waypoints, evenly spaced at 30 m
+void calculateTrajectory(vector<double> &next_x_vals,vector<double> &next_y_vals,double car_s,double car_d,double car_x,double car_y,double car_yaw,int prev_size,vector<double>  previous_path_x, vector<double>  previous_path_y, vector<double> &map_waypoints_x,vector<double> &map_waypoints_y,vector<double> &map_waypoints_s, vector<double>&map_waypoints_dx,vector<double> &map_waypoints_dy,int lane,double ref_vel, double projecting_dist ) {
   
   vector<double> ptsx;
   vector<double> ptsy;
@@ -246,7 +248,7 @@ void calculateTrajectory(vector<double> &next_x_vals,vector<double> &next_y_vals
   }
   
   // calculate how to break up spline so that we travel at out desired reference velocity
-  double target_x = 30;
+  double target_x = projecting_dist;
   double target_y = s(target_x);
   double target_dist = sqrt(target_x*target_x + target_y*target_y);
   
@@ -306,6 +308,104 @@ bool tooClose(int lane, double car_s, int prev_size, vector<vector<double>> &sen
 }
 
 
+// penalize lane shift to not shift if same cost
+double penalizeShift(int target_lane, int current_lane){
+  double cost = 0;
+  if (target_lane != current_lane)
+    cost = 1.0;
+  return cost;
+  
+}
+
+// calculate the cost shifting to a lane
+double safeLaneShift(int target_lane, int current_lane,double car_s, double car_speed, int prev_size, vector<vector<double>> &sensor_fusion,double projecting_dist)
+{
+  double cost = 0;
+  
+  // current lane is always safe
+  if (target_lane == current_lane)
+  {
+    cost = 10;
+    //cout << "checking if safe in current lane " << std::endl;
+    return cost;
+  }
+  
+  
+  // unsafe to shift outside lanes
+  if (target_lane < 0 || target_lane > 2) {
+    cost = 9999.0;
+    return cost;
+  }
+
+  for (int i = 0; i < sensor_fusion.size(); i++) {
+    // car is in this lane
+    float d = sensor_fusion[i][6];
+    if (d < (2+4*target_lane+2) && d > (2+4*target_lane-2))
+    {
+      double vx = sensor_fusion[i][3];
+      double vy = sensor_fusion[i][4];
+      double check_speed = sqrt(vx*vx+vy*vy);
+      double check_car_s = sensor_fusion[i][5];
+      
+      check_car_s += ((double)prev_size*0.02*check_speed);  // if we are using previous points we can project the s value
+      
+      // check s values are greater than mine and in the  gap
+      if((check_car_s > car_s) && ((check_car_s-car_s)< projecting_dist)) {
+        cout << "NOT SAFE in lane: " << target_lane << " car in front win the gap, distance: " << check_car_s-car_s  << std::endl;
+        cost = 999.0; // not safe
+        
+      }
+      // check if there is a car behind and greater speed
+      else if ((check_car_s < car_s) && ((car_s-check_car_s)< projecting_dist)) {
+        
+        cout << "car in lane: " << target_lane << " behind, distance: " << car_s-check_car_s << " speed: " << check_speed << std::endl;
+        cost = 10.0; // not safe
+        
+        // if larger speed not safe
+        if (check_speed > car_speed)
+        {
+          cout << "      NOT SAFE  in lane: " << target_lane << " car behind with more speed, distance: " << car_s-check_car_s << " speed: " << check_speed << std::endl;
+          cost = 999.0; // not safe
+        }
+      }
+
+    }
+  }
+  return cost;
+}
+
+
+
+// calculate the cost for driving in a lane
+double laneCost(int target_lane, int current_lane, double car_s, double car_speed, int prev_size, vector<vector<double>> &sensor_fusion,double projecting_dist)
+{
+  double cost = 0;
+  
+  cost += safeLaneShift(target_lane, current_lane,car_s,car_speed, prev_size, sensor_fusion,projecting_dist);
+  cost += penalizeShift(target_lane, current_lane);
+
+  cout << "cost lane: " << target_lane << " cost: " << cost  << std::endl;
+  return cost;
+}
+
+
+// calculate the best lane and if we need to change
+int findBestLane(int lane, double car_s, double car_speed, int prev_size, vector<vector<double>> &sensor_fusion,double projecting_dist)
+{
+  int nextLane = lane;
+
+  double cost_left = laneCost(lane-1,lane, car_s,car_speed, prev_size, sensor_fusion,projecting_dist);
+  double cost_straigth = laneCost(lane,lane, car_s,car_speed, prev_size, sensor_fusion,projecting_dist);
+  double cost_rigth = laneCost(lane+1,lane, car_s,car_speed, prev_size, sensor_fusion,projecting_dist);
+  
+  if ((cost_rigth < cost_straigth) && (cost_rigth < cost_left)) nextLane = lane + 1;
+  else if ((cost_left < cost_straigth)) nextLane = lane - 1;
+  
+  
+  
+  return nextLane;
+}
+
 
 
 int main() {
@@ -347,12 +447,12 @@ int main() {
   
   // variables from walktrough
   int lane = 1; // target lane
-  
   double ref_vel = 0; // target velocity mph
+  double projecting_dist = 30; // smoot target distance for changinbg lane
   
   
 
-  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane,&ref_vel](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&lane,&ref_vel,&projecting_dist](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -435,14 +535,14 @@ int main() {
           // code for vehicle mitigation
           bool too_close = tooClose(lane, car_s, prev_size, sensor_fusion);
           
-
-          
-          if (too_close && lane > 0)
+          if (too_close )  // only two states: wants to change lane, and not in need state
           {
-            lane -= 1;
+            //
+            cout << "wants to change from lane: " << lane << std::endl;
+            lane = findBestLane(lane,car_s, car_speed, prev_size, sensor_fusion,projecting_dist);
           }
           
-          // accellerate and decellerate depending on start
+          // accellerate and decellerate depending on cars in front and when starting
           
           if (too_close)
           {
@@ -453,10 +553,7 @@ int main() {
             ref_vel += 0.224;
           }
           
-          
-          
-          // walktrougth code using spline
-          // create a widely spaced (x,y) waypoints, evenly spaced at 30 m
+
         
           
           // code for smooth lane following
@@ -467,7 +564,7 @@ int main() {
           calculateTrajectory(next_x_vals,next_y_vals,car_s,car_d,car_x,car_y,car_yaw,
                               prev_size,previous_path_x,previous_path_y,
                               map_waypoints_x,map_waypoints_y,map_waypoints_s, map_waypoints_dx,map_waypoints_dy,
-                              lane,ref_vel );
+                              lane,ref_vel,projecting_dist );
           
           
           	// END // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
