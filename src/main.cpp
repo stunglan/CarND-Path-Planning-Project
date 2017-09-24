@@ -8,6 +8,7 @@
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
+#include "spline.h"
 
 using namespace std;
 
@@ -135,6 +136,8 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
 {
 	int prev_wp = -1;
+  
+  cout << "maps_s[prev_wp+1] " << maps_s[prev_wp+1] << std::endl;;
 
 	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
 	{
@@ -170,7 +173,7 @@ int main() {
   vector<double> map_waypoints_dy;
 
   // Waypoint map to read from
-  string map_file_ = "../data/highway_map.csv";
+  string map_file_ = "../../data/highway_map.csv";  // changed to cope with Xcode build structure
   // The max s value before wrapping around the track back to 0
   double max_s = 6945.554;
 
@@ -213,10 +216,33 @@ int main() {
         string event = j[0].get<string>();
         
         if (event == "telemetry") {
-          // j[1] is the data JSON object
           
+          /*
+           #### The map of the highway is in data/highway_map.txt
+           Each waypoint in the list contains  [x,y,s,dx,dy] values. x and y are the waypoint's map coordinate position, the s value is the distance along the road to get to that waypoint in meters, the dx and dy values define the unit normal vector pointing outward of the highway loop.
+           The highway's waypoints loop around so the frenet s value, distance along the road, goes from 0 to 6945.554.
+           Here is the data provided from the Simulator to the C++ Program
+           #### Main car's localization Data (No Noise)
+           ["x"] The car's x position in map coordinates
+           ["y"] The car's y position in map coordinate
+           ["s"] The car's s position in frenet coordinates
+           ["d"] The car's d position in frenet coordinates
+           ["yaw"] The car's yaw angle in the map
+           ["speed"] The car's speed in MPH
+           #### Previous path data given to the Planner
+           //Note: Return the previous list but with processed points removed, can be a nice tool to show how far along
+           the path has processed since last time.
+           ["previous_path_x"] The previous list of x points previously given to the simulator
+           ["previous_path_y"] The previous list of y points previously given to the simulator
+           #### Previous path's end s and d values
+           ["end_path_s"] The previous list's last point's frenet s value
+           ["end_path_d"] The previous list's last point's frenet d value
+           #### Sensor Fusion Data, a list of all other car's attributes on the same side of the road. (No Noise)
+           ["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates.
+           */
+          // j[1] is the data JSON object
         	// Main car's localization Data
-          	double car_x = j[1]["x"];
+            double car_x = j[1]["x"];
           	double car_y = j[1]["y"];
           	double car_s = j[1]["s"];
           	double car_d = j[1]["d"];
@@ -237,9 +263,22 @@ int main() {
 
           	vector<double> next_x_vals;
           	vector<double> next_y_vals;
+            // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          
+          /*
+           Acceleration is calculated by comparing the rate of change of average speed over .2 second intervals. In this case total acceleration at one point was as high as 75 m/s^2. Jerk was also very high. The jerk is calculated as the average acceleration over 1 second intervals. In order for the passenger to have an enjoyable ride both the jerk and the total acceleration should not exceed 10.
+           */
+          double dist_inc = 0.5;
+          for(int i = 0; i < 50; i++)
+          {
+            double next_s = car_s + (i+1)*dist_inc;
+            double next_d = 6;
+            vector<double> xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            next_x_vals.push_back(xy[0]);
+            next_y_vals.push_back(xy[1]);
+          }
 
-
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          	// END // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
