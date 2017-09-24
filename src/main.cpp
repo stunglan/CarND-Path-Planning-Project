@@ -419,7 +419,8 @@ int main() {
   vector<double> map_waypoints_dy;
 
   // Waypoint map to read from
-  string map_file_ = "../../data/highway_map.csv";  // changed to cope with Xcode build structure
+  //string map_file_ = "../../data/highway_map.csv";  // changed to cope with Xcode build structure
+  string map_file_ = "../data/highway_map.csv";  // changed to cope with Xcode build structure
   // The max s value before wrapping around the track back to 0
   double max_s = 6945.554;
 

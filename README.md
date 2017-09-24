@@ -12,7 +12,14 @@ In this project your goal is to safely navigate around a virtual highway with ot
 ## Rubric 
 
 ### Compilation
-The code compiles and run ok. I have used xcode on a mac to run it. The excecutable file is a level down, so the path to the data file is adjusted in line 422 to ```string map_file_ = "../../data/highway_map.csv";```, this may vary dependent of cmake target architecture.
+The code compiles and run ok. I have used xcode on a mac to run it. 
+
+When compiling with xcode ```cmake .. /G Xcode```:
+The excecutable file is a level down, so the path to the data file is adjusted in line 422 to ```string map_file_ = "../../data/highway_map.csv";```, this may vary dependent of cmake target architecture.
+
+When compiling ```cmake .. /G Xcode```:
+The path to the data file is adjusted in line 422 to ```string map_file_ = "../data/highway_map.csv";```.
+
 
 ### Valid Trajectories
 The code should satisfy these points.
