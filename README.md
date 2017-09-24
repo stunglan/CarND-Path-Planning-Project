@@ -37,11 +37,11 @@ The path generated also accept the lane as a parameter and will generate lane sh
 
 #### Changing lane state behavior
 
-No full state machine is implemented, only two states exists: *continue straight ahead* and *I what to change lane*. The default mode is to continue straight ahead in the same lane, but if the car closes in on a car (in the function ```tooClose```), the mode is shifted and the code will try to find another lane.
+No full state machine is implemented, only two states exists: *continue straight ahead* and *I want to change lane*. The default mode is to continue straight ahead in the same lane, but if the car closes in on a car (in the function ```tooClose```), the mode is shifted and the code will try to find another lane.
 
-The best lane is then determinated in in the function ```findBestLane```. This function uses a cost function (implemented in ```laneCost```). The cost function have only two contributing cost generators: ```penalizeShift``` and ```safeLaneShift```. The ```penalizeShift``` function will only slightly penelize to shift lane, in order to avoid situation driving between lanes where the car does not see the difference between tow different lanes. The ```safeLaneShift``` function will first penalize slightly to stay in the current line, penalize heavily if we want to change outside the legal lanes, and then also heavy if the projected path is either into a lane and a slot where there is a car projected to be in the slot in a distance of the car, or there is a car coming up behind.
+The best lane is then determinated in in the function ```findBestLane```. This function uses a cost function (implemented in ```laneCost```). The cost function have only two contributing cost generators: ```penalizeShift``` and ```safeLaneShift```. The ```penalizeShift``` function will only slightly penalize to shift lane, in order to avoid situation driving between lanes where the car does not see the difference between tow different lanes. The ```safeLaneShift``` function will first penalize slightly to stay in the current line, penalize heavily if we want to change outside the legal lanes, and then also heavy if the projected path is either into a lane and a slot where there is a car projected to be in the slot in a distance of the car, or there is a car coming up behind.
 
-The strategy is a conservative one, in that the car will not change lanes unless the margins are safe. And also the path does not try to change to a optimal lane, if the lane two lanes over do not have any traffic.
+The strategy is a conservative one, in that the car will not change lanes unless the margins are safe. And also the behaviour does not try to change path to a optimal lane, if the lane two lanes over do not have any traffic.
 
 
 
